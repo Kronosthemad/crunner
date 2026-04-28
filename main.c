@@ -2,9 +2,62 @@
 #include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
+#include <sys/stat.h>
 #include "ini.h" // You can grab ini.h and ini.c from GitHub (benhoyt/inih)
 #include <stdbool.h>
 #include <sched.h>
+
+#define CONFIG_SUBDIR "crunner"
+#define CONFIG_FILE "apps.ini"
+
+static char* get_config_path(void) {
+    static char path[1024];
+    char* xdg_config_home = getenv("XDG_CONFIG_HOME");
+    char* xdg_config_dirs = getenv("XDG_CONFIG_DIRS");
+    char home[1024];
+
+    if (!getcwd(home, sizeof(home))) {
+        return NULL;
+    }
+
+    struct stat st;
+
+    if (xdg_config_home) {
+        snprintf(path, sizeof(path), "%s/%s/%s", xdg_config_home, CONFIG_SUBDIR, CONFIG_FILE);
+        if (stat(path, &st) == 0) {
+            return path;
+        }
+    } else {
+        char* home_env = getenv("HOME");
+        if (home_env) {
+            snprintf(path, sizeof(path), "%s/.config/%s/%s", home_env, CONFIG_SUBDIR, CONFIG_FILE);
+            if (stat(path, &st) == 0) {
+                return path;
+            }
+        }
+    }
+
+    if (xdg_config_dirs) {
+        char dirs[1024];
+        strncpy(dirs, xdg_config_dirs, sizeof(dirs) - 1);
+        dirs[sizeof(dirs) - 1] = '\0';
+        char* token = strtok(dirs, ":");
+        while (token) {
+            snprintf(path, sizeof(path), "%s/%s/%s", token, CONFIG_SUBDIR, CONFIG_FILE);
+            if (stat(path, &st) == 0) {
+                return path;
+            }
+            token = strtok(NULL, ":");
+        }
+    }
+
+    snprintf(path, sizeof(path), "%s/%s", home, CONFIG_FILE);
+    if (stat(path, &st) == 0) {
+        return path;
+    }
+
+    return NULL;
+}
 
 bool is_running(const char* name) {
     char command[256];
@@ -51,8 +104,28 @@ int main(int argc, char* argv[]) {
     configuration config;
     config.target_group = argv[1];
 
-    if (ini_parse("apps.ini", handler, &config) < 0) {
-        printf("Can't load 'apps.ini'\n");
+    char* config_path = get_config_path();
+    if (!config_path) {
+        printf("Can't find config file. Checked locations:\n");
+        char* xdg_config_home = getenv("XDG_CONFIG_HOME");
+        char* home = getenv("HOME");
+        char* xdg_config_dirs = getenv("XDG_CONFIG_DIRS");
+        if (xdg_config_home) {
+            printf("  %s/%s/%s\n", xdg_config_home, CONFIG_SUBDIR, CONFIG_FILE);
+        } else if (home) {
+            printf("  %s/.config/%s/%s\n", home, CONFIG_SUBDIR, CONFIG_FILE);
+        }
+        if (xdg_config_dirs) {
+            printf("  %s/%s/%s\n", xdg_config_dirs, CONFIG_SUBDIR, CONFIG_FILE);
+        }
+        printf("  ./%s (current directory)\n", CONFIG_FILE);
+        return 1;
+    }
+
+    printf("Using config: %s\n", config_path);
+
+    if (ini_parse(config_path, handler, &config) < 0) {
+        printf("Can't load config: %s\n", config_path);
         return 1;
     }
 
