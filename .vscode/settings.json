@@ -1,0 +1,9 @@
+{
+    "makefile.launchConfigurations": [
+        {
+            "cwd": "/home/kronos/Build/Projects/crunner",
+            "binaryPath": "/home/kronos/Build/Projects/crunner/crunner",
+            "binaryArgs": []
+        }
+    ]
+}
