@@ -3,6 +3,17 @@
 #include <string.h>
 #include <unistd.h>
 #include "ini.h" // You can grab ini.h and ini.c from GitHub (benhoyt/inih)
+#include <stdbool.h>
+#include <sched.h>
+
+bool is_running(const char* name) {
+    char command[256];
+    // Use pgrep -x to look for an exact match of the process name
+    snprintf(command, sizeof(command), "pgrep -x %s > /dev/null", name);
+    
+    int result = system(command);
+    return (result == 0); // system returns 0 if pgrep found a match
+}
 
 typedef struct {
     const char* target_group;
@@ -12,19 +23,23 @@ static int handler(void* user, const char* section, const char* name, const char
     configuration* pconfig = (configuration*)user;
 
     // Check if the current section matches the group we want to launch
-    if (strcmp(section, pconfig->target_group) == 0) {
-        printf("Launching %s: %s\n", name, value);
-        
-        pid_t pid = fork();
-        if (pid == 0) {
-            // Child process
-            char *args[] = {(char*)value, NULL};
-            execv(args[0], args);
-            perror("execv failed");
-            exit(1);
-        }
-    }
-    return 1;
+    	if (is_running(value)) {
+    		printf("%s is already running. Skipping.\n", value);
+	} else {
+    		if (strcmp(section, pconfig->target_group) == 0) {
+		printf("Launching %s: %s\n", name, value);
+		
+		pid_t pid = fork();
+		if (pid == 0) {
+		    // Child process
+		    char *args[] = {(char*)value, NULL};
+		    execv(args[0], args);
+		    perror("execv failed");
+		    exit(1);
+		}
+	    }
+	    return 1;
+	}
 }
 
 int main(int argc, char* argv[]) {
